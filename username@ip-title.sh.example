@@ -18,8 +18,8 @@
 # Primary Server Configuration
 # ===================================================================
 # --- EDIT THESE VALUES ---
-USERNAME="hacknitive"         # The username for the remote server.
-SERVER_IP="0.0.0.0"   # The IP address or hostname of the remote server.
+USERNAME="your_username"         # The username for the remote server.
+SERVER_IP="your_server_ip"   # The IP address or hostname of the remote server.
 # -------------------------
 
 # ===================================================================

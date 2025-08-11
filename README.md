@@ -38,17 +38,17 @@ It is particularly useful for:
 1.  **Rename the Script:**
     It's recommended to rename the example file to something simple for your server.
     ```bash
-    mv username@ip-title.sh.example connect-myserver.sh
+    mv username@ip-title.sh.example your_username@your_server_ip-something-to-remember.sh
     ```
 
 2.  **Make it Executable:**
     Open your terminal and grant execute permissions to the script:
     ```bash
-    chmod +x connect-myserver.sh
+    chmod +x your_username@your_server_ip-something-to-remember.sh
     ```
 
 3.  **Configure the Script:**
-    Open `connect-myserver.sh` with a text editor and modify the variables in the **Primary Server Configuration** and **Connection & Reconnect Behavior Configuration** sections at the top.
+    Open `your_username@your_server_ip-something-to-remember.sh` with a text editor and modify the variables in the **Primary Server Configuration** and **Connection & Reconnect Behavior Configuration** sections at the top.
 
     ```bash
     # ===================================================================
@@ -70,7 +70,7 @@ It is particularly useful for:
 With the configuration in place, simply execute the script from your terminal:
 
 ```bash
-./connect-myserver.sh
+./your_username@your_server_ip-something-to-remember.sh
 ```
 
 The script will guide you through any first-time setup (like key generation or password entry for `ssh-copy-id`) and then establish the connection. To terminate the session and the script permanently, simply type `exit` or `logout` in the remote server's shell.
@@ -79,7 +79,7 @@ The script will guide you through any first-time setup (like key generation or p
 
 ```
 .
-├── connect-myserver.sh     # The main executable script (renamed from .example)
+├── your_username@your_server_ip-something-to-remember.sh     # The main executable script (renamed from .example)
 └── README.md               # This file
 ```
 
