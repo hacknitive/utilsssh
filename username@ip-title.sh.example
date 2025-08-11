@@ -1,0 +1,144 @@
+#!/bin/bash
+
+# ==============================================================================
+# Persistent SSH Connection Manager
+#
+# Author: Reza 'Sam' Aghamohammadi (Hacknitive)
+# License: MIT
+#
+# Description:
+# This script provides a robust method for connecting to a remote SSH server.
+# It automates the initial setup, including SSH key generation and installation,
+# and maintains a persistent connection by automatically reconnecting if the
+# session is dropped due to network issues or timeouts.
+#
+# ==============================================================================
+
+# ===================================================================
+# Primary Server Configuration
+# ===================================================================
+# --- EDIT THESE VALUES ---
+USERNAME="hacknitive"         # The username for the remote server.
+SERVER_IP="0.0.0.0"   # The IP address or hostname of the remote server.
+# -------------------------
+
+# ===================================================================
+# Connection & Reconnect Behavior Configuration
+# ===================================================================
+# How long (in seconds) to wait for the initial connection before giving up.
+INITIAL_CONNECT_TIMEOUT=3
+
+# How often (in seconds) to send a "keep-alive" message to the server.
+# This helps the client detect when a connection has silently dropped.
+KEEP_ALIVE_INTERVAL=3
+
+# How many keep-alive messages can fail before the connection is considered dead.
+# The total time before a disconnect is detected is KEEP_ALIVE_INTERVAL * KEEP_ALIVE_PROBES.
+# For example, 3 * 3 = 9 seconds of unresponsiveness.
+KEEP_ALIVE_PROBES=3
+
+# How long (in seconds) to wait after a disconnection before trying to reconnect.
+RECONNECT_DELAY=1
+
+# ===================================================================
+# System-Level Configuration (usually no need to change)
+# ===================================================================
+# Defines the path to your SSH known_hosts file.
+KNOWN_HOSTS="$HOME/.ssh/known_hosts"
+# Defines the path to your public SSH key. This is the key that will be
+# installed on the server for passwordless authentication.
+IDENTITY_FILE="$HOME/.ssh/id_rsa.pub"
+
+# --- SCRIPT LOGIC BEGINS ---
+
+# Set the terminal window title for easy identification of this session.
+echo -ne "\033]0;${USERNAME}@${SERVER_IP}\007"
+
+# --- Step 1: Ensure an SSH public key exists. ---
+# If the public key file specified in IDENTITY_FILE does not exist, the user
+# likely needs to generate a new key pair.
+if [ ! -f "$IDENTITY_FILE" ]; then
+    echo "SSH public key ($IDENTITY_FILE) not found."
+    read -p "Do you want to generate a new SSH key pair? (y/n): " answer
+    if [[ "$answer" =~ ^[Yy]$ ]]; then
+         # Generate a new 4096-bit RSA key pair.
+         # -t rsa: Specifies the RSA algorithm.
+         # -b 4096: Sets the key strength to 4096 bits.
+         # -f "${IDENTITY_FILE%%.pub}": Sets the filename for the private key (e.g., /home/user/.ssh/id_rsa).
+         # -N "": Provides an empty passphrase for non-interactive use.
+         ssh-keygen -t rsa -b 4096 -f "${IDENTITY_FILE%%.pub}" -N ""
+         if [ $? -ne 0 ]; then
+             echo "Failed to generate SSH key pair."
+             exit 1
+         fi
+    else
+         echo "Cannot proceed without an SSH public key."
+         exit 1
+    fi
+fi
+
+# --- Step 2: Ensure correct permissions and update known_hosts. ---
+# The ~/.ssh directory must have strict permissions (700).
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
+# The known_hosts file must also have strict permissions (600).
+if [ ! -f "$KNOWN_HOSTS" ]; then
+    touch "$KNOWN_HOSTS"
+    chmod 600 "$KNOWN_HOSTS"
+fi
+
+# Check if the server's fingerprint is already in known_hosts to avoid warnings.
+# `ssh-keygen -F` searches for the specified host and returns 0 if found.
+if ! ssh-keygen -F "$SERVER_IP" > /dev/null 2>&1; then
+    echo "Updating known_hosts with the fingerprint of $SERVER_IP..."
+    # `ssh-keyscan` retrieves the public key from the server.
+    # -H hashes the IP address, which is a security best practice.
+    ssh-keyscan -H "$SERVER_IP" >> "$KNOWN_HOSTS" 2>/dev/null
+fi
+
+# --- Step 3: Test if key-based authentication is already working. ---
+echo "Checking if key-based authentication is already set up..."
+# `BatchMode=yes` tells SSH not to ask for a password. If it can connect
+# without a password, it means key-based auth is working, and it will exit with code 0.
+# If it requires a password, it will fail and exit with a non-zero code.
+ssh -o BatchMode=yes -o ConnectTimeout=$INITIAL_CONNECT_TIMEOUT "$USERNAME@$SERVER_IP" exit 0 &>/dev/null
+SSH_EXIT_CODE=$?
+
+# --- Step 4: If key-based auth is not set up, use ssh-copy-id. ---
+if [ $SSH_EXIT_CODE -eq 0 ]; then
+    echo "Key-based authentication is already set up. Proceeding to login..."
+else
+    echo "Key-based authentication is not set up."
+    echo "Running ssh-copy-id to install your public key. You may be prompted for your password..."
+    # `ssh-copy-id` is the standard, secure way to install a public key on a server.
+    # It will prompt for the user's password for this one-time operation.
+    ssh-copy-id "$USERNAME@$SERVER_IP"
+    if [ $? -ne 0 ]; then
+         echo "Failed to install SSH key using ssh-copy-id."
+         exit 1
+    fi
+    echo "SSH key installed successfully."
+fi
+
+# --- Step 5: Start the persistent connection loop. ---
+echo "Starting persistent connection to the server. To exit, type 'exit' or 'logout' in the server's shell."
+while true; do
+    # This is the main SSH command.
+    # -o ServerAliveInterval: Sends a keep-alive message to the server every N seconds.
+    # -o ServerAliveCountMax: Declares the connection dead after N failed keep-alive messages.
+    # If the connection drops, the ssh command will exit with a non-zero code.
+    ssh -o ServerAliveInterval=$KEEP_ALIVE_INTERVAL -o ServerAliveCountMax=$KEEP_ALIVE_PROBES "$USERNAME@$SERVER_IP"
+    EXIT_CODE=$?
+
+    # If the user typed `exit` on the server, the exit code will be 0.
+    # In this case, we break the loop and end the script.
+    if [ $EXIT_CODE -eq 0 ]; then
+        echo "Logged out successfully. Exiting script."
+        break
+    else
+        # If the exit code is non-zero (e.g., 255 for a lost connection),
+        # we inform the user and wait before attempting to reconnect.
+        echo "Connection lost (Exit code: $EXIT_CODE). Attempting to reconnect in $RECONNECT_DELAY second(s)..."
+        sleep $RECONNECT_DELAY
+    fi
+done
