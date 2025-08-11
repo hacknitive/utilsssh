@@ -38,7 +38,7 @@ It is particularly useful for:
 1.  **Rename the Script:**
     It's recommended to rename the example file to something simple for your server.
     ```bash
-    mv username@ip-title.sh.example your_username@your_server_ip-something-to-remember.sh
+    cp username@ip-title.sh.example your_username@your_server_ip-something-to-remember.sh
     ```
 
 2.  **Make it Executable:**
